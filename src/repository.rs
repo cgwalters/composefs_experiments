@@ -98,7 +98,7 @@ impl Repository {
         fs_ioc_enable_verity::<&OwnedFd, Sha256HashValue>(&ro_fd)?;
 
         // double-check
-        let measured_digest: Sha256HashValue = fs_ioc_measure_verity(&ro_fd)?;
+        let measured_digest = fs_ioc_measure_verity(&ro_fd)?;
         assert!(measured_digest == digest);
 
         if let Err(err) = linkat(
@@ -123,8 +123,8 @@ impl Repository {
         expected_verity: &Sha256HashValue,
     ) -> Result<OwnedFd> {
         let fd = self.openat(filename, OFlags::RDONLY)?;
-        let measured_verity: Sha256HashValue = fs_ioc_measure_verity(&fd)?;
-        if measured_verity != *expected_verity {
+        let measured_verity = &fs_ioc_measure_verity(&fd)?;
+        if measured_verity != expected_verity {
             bail!("bad verity!")
         } else {
             Ok(fd)
@@ -194,7 +194,7 @@ impl Repository {
     pub fn check_stream(&self, sha256: &Sha256HashValue) -> Result<Option<Sha256HashValue>> {
         match self.openat(&format!("streams/{}", hex::encode(sha256)), OFlags::RDONLY) {
             Ok(stream) => {
-                let measured_verity: Sha256HashValue = fs_ioc_measure_verity(&stream)?;
+                let measured_verity = fs_ioc_measure_verity(&stream)?;
                 let mut context = Sha256::new();
                 let mut split_stream = SplitStreamReader::new(File::from(stream))?;
 

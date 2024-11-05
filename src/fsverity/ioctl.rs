@@ -3,7 +3,7 @@ use std::os::fd::AsFd;
 use anyhow::Result;
 use rustix::ioctl;
 
-use super::FsVerityHashValue;
+use super::{FsVerityHashValue, Sha256HashValue};
 
 // See /usr/include/linux/fsverity.h
 #[repr(C)]
@@ -50,29 +50,10 @@ pub struct FsVerityDigest<F> {
     digest: F,
 }
 
-// #define FS_IOC_MEASURE_VERITY   _IORW('f', 134, struct fsverity_digest)
-type FsIocMeasureVerity = ioctl::ReadWriteOpcode<b'f', 134, FsVerityDigest<()>>;
-
-pub fn fs_ioc_measure_verity<F: AsFd, H: FsVerityHashValue>(fd: F) -> Result<H> {
-    let digest_size = std::mem::size_of::<H>() as u16;
-    let digest_algorithm = H::ALGORITHM as u16;
-
-    let mut digest = FsVerityDigest::<H> {
-        digest_algorithm,
-        digest_size,
-        digest: H::EMPTY,
-    };
-
-    unsafe {
-        ioctl::ioctl(
-            fd,
-            ioctl::Updater::<FsIocMeasureVerity, FsVerityDigest<H>>::new(&mut digest),
-        )?;
-    }
-
-    if digest.digest_algorithm != digest_algorithm || digest.digest_size != digest_size {
-        Err(std::io::Error::from(std::io::ErrorKind::InvalidData))?
-    } else {
-        Ok(digest.digest)
-    }
+pub fn fs_ioc_measure_verity<F: AsFd>(fd: F) -> Result<Sha256HashValue> {
+    let mut digest = composefs::fsverity::Digest::new();
+    composefs::fsverity::fsverity_digest_from_fd(fd.as_fd(), &mut digest)?;
+    let mut r = [0u8; 32];
+    r.copy_from_slice(digest.get());
+    Ok(r)
 }
